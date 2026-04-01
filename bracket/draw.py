@@ -15,9 +15,7 @@ from bracket import config as C
 
 @dataclass
 class Team:
-    seed: int | None = None
     name: str = ""
-    group: str = ""
 
 
 @dataclass
@@ -56,10 +54,7 @@ def build_half_bracket(teams: list[Team]) -> list[list[Match]]:
 
 
 def _slot_label(team: Team) -> str:
-    if not team.name and not team.seed:
-        return ""
-    prefix = f"({team.seed}) " if team.seed else ""
-    return f"{prefix}{team.name}"
+    return team.name
 
 
 def draw_bracket(
