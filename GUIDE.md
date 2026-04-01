@@ -7,9 +7,13 @@ A friendly bracket pool for the 2026 FIFA World Cup. Print brackets, collect pic
 | What | Where | Purpose |
 |------|-------|---------|
 | **Bracket generator** | `bracket/` + `generate.py` | Produces a printable 32-team SVG/PDF bracket matching the official FIFA knockout path |
+| **Group stage SVG** | `bracket/draw_groups.py` + `generate_groups.py` | 12-group grid showing all 48 teams |
+| **Interactive entry** | `docs/entry.html` | Drag-and-drop bracket filling in the browser |
 | **Scoring engine** | `score.py` | Scores every entry against actual results and writes standings |
-| **Leaderboard site** | `docs/index.html` | Single-page GitHub Pages site showing live standings |
+| **Leaderboard site** | `docs/index.html` | Public standings page |
 | **Data files** | `data/` | JSON files for entries, results, and scoring config |
+| **Sync script** | `sync_to_parkland.py` | Copies static assets to parkland Flask app |
+| **Flask blueprint** | `parklandapp/worldcup/` (in parkland repo) | Serves pages at parkland.dev/worldcup, handles submissions |
 
 ## Setup
 
@@ -41,7 +45,7 @@ Tweak colors, fonts, spacing, and sizes in `bracket/config.py` and re-run.
 5. Run `uv run score.py` to regenerate standings
 6. Push to GitHub — the leaderboard updates automatically
 
-A web form for friends to submit picks online is planned for later.
+Friends can also submit brackets online at **parkland.dev/worldcup/entry** (requires a 6-character access code).
 
 ## Scoring
 
@@ -84,18 +88,28 @@ Change any value, re-run `uv run score.py`, and push. The leaderboard site reads
 
 ## Adding a friend's bracket
 
-Edit `data/entries.json` and add an object to the `"entries"` array. Each entry needs:
+Brackets submitted online at parkland.dev/worldcup/entry are saved automatically to the Flask server. Each entry gets a unique ID like `Ronaldo-07`.
 
-- **name** — the friend's display name
+To add a bracket manually, edit `data/entries.json` and add an object to the `"entries"` array. Each entry needs:
+
+- **id** — unique ID (e.g., `Messi-12`)
+- **name** — the friend's real name (private)
+- **nickname** — public display name shown on the leaderboard
+- **paid** — `true` or `false`
 - **submitted** — date submitted (YYYY-MM-DD)
 - **picks** — their winner pick for every match, organized by round
 - **champion** — their overall champion pick
 
-Match IDs follow FIFA numbering (M73–M88 for R32, M89–M96 for R16, etc.). See the example entry already in the file.
+Match IDs follow FIFA numbering (M73-M88 for R32, M89-M96 for R16, etc.). See the example entry already in the file.
 
-## Entering results
+## Admin guide (for your son)
 
-As matches finish, add the winner to the appropriate round in `data/results.json`:
+This is the daily routine once the tournament starts.
+
+### After each day's matches
+
+1. Open `data/results.json`
+2. Add the winner of each match that was played:
 
 ```json
 {
@@ -110,14 +124,65 @@ As matches finish, add the winner to the appropriate round in `data/results.json
 }
 ```
 
-Then run:
+The winner is the team name as it appears in everyone's brackets (e.g., `"Mexico"`, `"Brazil"`).
+
+3. Save the file and run:
 
 ```
-uv run score.py --verbose      # scores + prints leaderboard to console
-git add docs/standings.json data/results.json
-git commit -m "Update results"
+uv run score.py --verbose
+```
+
+This prints the leaderboard to the console and writes `docs/standings.json`.
+
+4. Sync and push:
+
+```
+uv run sync_to_parkland.py
+git add -A
+git commit -m "Results for June 28"
 git push
 ```
+
+The public leaderboard updates automatically.
+
+### Marking someone as paid
+
+Open the entries file on the Flask server (`parklandapp/worldcup/data/entries.json` in the parkland repo) and change `"paid": false` to `"paid": true` for the entry.
+
+### Changing the access code
+
+From the bracket project:
+
+```
+uv run set_access_code.py NEWCODE
+```
+
+The code must be exactly 6 characters. Case-sensitive. Then sync and deploy.
+
+### Match ID reference
+
+| Round | Match IDs |
+|-------|-----------|
+| Round of 32 | M73 - M88 (16 matches) |
+| Round of 16 | M89 - M96 (8 matches) |
+| Quarterfinals | M97 - M100 (4 matches) |
+| Semifinals | M101 - M102 (2 matches) |
+| Final | M103 (1 match) |
+
+### Setting the champion
+
+Once the final is decided, add the winner to `data/results.json`:
+
+```json
+{
+  "rounds": {
+    "Final": { "M103": "Brazil" }
+  },
+  "champion": "Brazil"
+}
+```
+
+Then run `uv run score.py` — champion bonus points are applied automatically.
 
 ## Bracket slot labels
 
@@ -127,13 +192,28 @@ The bracket uses the official FIFA 2026 knockout path. Slots are labeled by grou
 - **2B** = Group B runner-up
 - **Blank slots** = third-place qualifiers (unknown until group stage ends)
 
-## GitHub Pages
+## Deploying to parkland.dev
 
-The leaderboard is live at: **https://pdbartsch.github.io/bracket/**
+Static assets live in `docs/` in this repo (source of truth). To push changes to parkland.dev:
 
-It's a static page served from `docs/`. Pushing to `main` triggers a rebuild automatically.
+```
+uv run sync_to_parkland.py       # copies changed files to parkland app
+cd E:\projects\parkland
+gcloud app deploy                # deploy to parkland.dev
+```
+
+Pages are served at:
+- **parkland.dev/worldcup** — public leaderboard
+- **parkland.dev/worldcup/entry** — bracket entry (access code required)
+
+## GitHub Pages (backup)
+
+The leaderboard is also available at: **https://pdbartsch.github.io/bracket/**
+
+Served from `docs/`. Pushing to `main` triggers a rebuild automatically.
 
 ## Planned
 
-- Web form for friends to submit brackets online
+- Admin page for entering results in the browser
+- D3.js analysis infographics
 - Fillable PDF bracket

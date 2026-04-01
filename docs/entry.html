@@ -17,6 +17,23 @@
   <a href="analysis.html">Analysis</a>
 </nav>
 
+<!-- Access gate -->
+<div id="access-gate" style="display:flex;align-items:center;justify-content:center;height:calc(100vh - 44px);">
+  <div style="text-align:center;background:var(--card);padding:40px;border-radius:12px;border:1px solid var(--border);max-width:360px;">
+    <h2 style="color:var(--accent);margin-bottom:6px;">Enter Access Code</h2>
+    <p style="color:var(--muted);font-size:0.85em;margin-bottom:20px;">You need a code to fill in a bracket.</p>
+    <input type="text" id="access-code" placeholder="code" maxlength="6"
+           style="width:200px;padding:10px;text-align:center;font-size:1.2em;letter-spacing:3px;
+                  border:2px solid var(--border);border-radius:6px;font-family:var(--font-mono);"
+           autocomplete="off" spellcheck="false">
+    <div id="access-error" style="color:#c62828;font-size:0.8em;margin-top:8px;min-height:1.2em;"></div>
+    <button class="btn btn-primary" id="btn-access" style="margin-top:12px;padding:10px 32px;">
+      Enter
+    </button>
+  </div>
+</div>
+
+<div id="entry-content" style="display:none;">
 <div class="page-header">
   <h1>Fill Your Bracket</h1>
   <p class="subtitle">Drag countries onto the bracket or click a slot to type in</p>
@@ -77,6 +94,58 @@
   </div>
 </div>
 
-<script type="module" src="js/entry-app.js"></script>
+</div><!-- end entry-content -->
+
+<script>
+// Simple access gate — code is hashed so it's not plaintext in source
+// To change the code, update the hash below (SHA-256 of the 6-char code)
+const ACCESS_HASH = '6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090'; // placeholder — set during setup
+
+async function sha256(text) {
+  const buf = await crypto.subtle.digest('SHA-256',
+    new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function checkAccess() {
+  // Already authenticated this session?
+  if (sessionStorage.getItem('bracket-access') === 'granted') {
+    showEntry();
+    return;
+  }
+
+  document.getElementById('btn-access').addEventListener('click', tryCode);
+  document.getElementById('access-code').addEventListener('keydown', e => {
+    if (e.key === 'Enter') tryCode();
+  });
+  document.getElementById('access-code').focus();
+}
+
+async function tryCode() {
+  const code = document.getElementById('access-code').value.trim();
+  if (!code) return;
+
+  const hash = await sha256(code);
+  if (hash === ACCESS_HASH) {
+    sessionStorage.setItem('bracket-access', 'granted');
+    showEntry();
+  } else {
+    document.getElementById('access-error').textContent = 'Invalid code. Try again.';
+    document.getElementById('access-code').select();
+  }
+}
+
+function showEntry() {
+  document.getElementById('access-gate').style.display = 'none';
+  document.getElementById('entry-content').style.display = 'block';
+  // Dynamically load the entry app module
+  const script = document.createElement('script');
+  script.type = 'module';
+  script.src = 'js/entry-app.js';
+  document.body.appendChild(script);
+}
+
+checkAccess();
+</script>
 </body>
 </html>

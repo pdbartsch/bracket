@@ -12,11 +12,17 @@ let champion = '';
 let placedCountries = new Set();
 let entryId = '';
 
+const STAR_PLAYERS = [
+  'Lamine', 'Messi', 'Neymar', 'vanDijk', 'Pele', 'Maradona', 'Ronaldo',
+  'Ronaldinho', 'Zidane', 'Zico', 'Kaka', 'Romario', 'Eusebio', 'Xavi',
+  'Iniesta', 'Garrincha', 'Figo', 'Cafu', 'Rivaldo', 'Socrates', 'Mbappe',
+  'Haaland', 'Rudiger', 'Bellingham', 'Zlatan',
+];
+
 function generateId() {
-  // 8-char hex ID
-  const arr = new Uint8Array(4);
-  crypto.getRandomValues(arr);
-  return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+  const name = STAR_PLAYERS[Math.floor(Math.random() * STAR_PLAYERS.length)];
+  const num = String(Math.floor(Math.random() * 100)).padStart(2, '0');
+  return `${name}-${num}`;
 }
 
 async function init() {
@@ -40,8 +46,8 @@ async function init() {
     } catch { /* ignore bad data */ }
   }
 
-  // Generate unique ID if not already set
-  if (!entryId) {
+  // Generate unique ID if not set, or regenerate if it contains special chars (legacy)
+  if (!entryId || /[^a-zA-Z0-9-]/.test(entryId)) {
     entryId = generateId();
     saveTolocalStorage();
   }
@@ -291,7 +297,7 @@ function clearAll() {
   updateProgress();
 }
 
-function exportPicks() {
+async function exportPicks() {
   const name = document.getElementById('name-input').value.trim();
   const nickname = document.getElementById('nickname-input').value.trim();
   if (!name || !nickname) return alert('Enter your name and nickname first.');
@@ -320,20 +326,46 @@ function exportPicks() {
     }
   }
 
-  const json = JSON.stringify(entry, null, 2);
+  // Submit to server, fall back to clipboard copy
+  const btn = document.getElementById('btn-export');
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
 
-  // Copy to clipboard
-  navigator.clipboard.writeText(json).then(() => {
-    alert('Entry copied to clipboard! Send it to the pool admin.');
-  }).catch(() => {
-    // Fallback: show in a text area
-    const ta = document.createElement('textarea');
-    ta.value = json;
-    ta.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:400px;height:300px;z-index:1000;font-family:monospace;font-size:12px;';
-    document.body.appendChild(ta);
-    ta.select();
-    alert('Copy the JSON from the text area.');
-  });
+  try {
+    const resp = await fetch('/worldcup/api/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry),
+    });
+
+    if (resp.ok) {
+      const result = await resp.json();
+      const verb = result.action === 'updated' ? 'updated' : 'submitted';
+      alert(`Bracket ${verb}! Your ID is ${entry.id}. Keep it safe — you'll need it to check your entry.`);
+      localStorage.removeItem('bracket-wip');
+    } else {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || `Server error (${resp.status})`);
+    }
+  } catch (e) {
+    // Fallback: copy to clipboard
+    console.warn('Submit failed, falling back to clipboard:', e.message);
+    const json = JSON.stringify(entry, null, 2);
+    try {
+      await navigator.clipboard.writeText(json);
+      alert(`Could not reach server (${e.message}). Entry copied to clipboard instead — send it to the pool admin.`);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = json;
+      ta.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:400px;height:300px;z-index:1000;font-family:monospace;font-size:12px;padding:12px;';
+      document.body.appendChild(ta);
+      ta.select();
+      alert(`Could not reach server. Copy the JSON from the text area and send it to the pool admin.`);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Submit Bracket';
+  }
 }
 
 // Set up drag-and-drop on the SVG
@@ -427,9 +459,7 @@ function setupDragDrop() {
   });
 }
 
-// Boot
-document.addEventListener('DOMContentLoaded', () => {
-  init().then(() => {
-    setupDragDrop();
-  });
+// Boot — runs immediately since this module is loaded after DOM is ready
+init().then(() => {
+  setupDragDrop();
 });
