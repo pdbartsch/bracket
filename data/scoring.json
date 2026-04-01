@@ -1,0 +1,15 @@
+{
+  "points_per_round": {
+    "R32": 1,
+    "R16": 2,
+    "QF": 4,
+    "SF": 8,
+    "Final": 16
+  },
+  "champion_bonus": 10,
+  "payout": {
+    "1st": "60%",
+    "2nd": "25%",
+    "3rd": "15%"
+  }
+}
